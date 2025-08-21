@@ -3,7 +3,8 @@ import numpy as np
 import scipy as sc
 import cvxpy as cp
 
-from ipadmm import solve_ipadmm
+from solvers.external import sdp_cvx
+from solvers.ipadmm import solve_ipadmm
 
 
 def generate_random_sdp(n, m):
@@ -31,7 +32,7 @@ def generate_random_sdp(n, m):
 
     # We also need a positive definite matrix S.
     # We create it by multiplying a random matrix P by its transpose.
-    # P @ P.T is always positive semidefinite; it's positive definite if P has full rank.
+    # P @ P.T is always ¬positive semidefinite; it's positive definite if P has full rank.
     P = np.random.randn(n, n)
     S_dual_known = P @ P.T  # + 1e-4 * np.eye(n)
 
@@ -41,46 +42,6 @@ def generate_random_sdp(n, m):
     C = sum(y_dual_known[i] * A[i] for i in range(m)) + S_dual_known
 
     return C, A, b
-
-
-def sdp_cvx(C, A, b, solver):
-    n = C.shape[0]
-    m = len(A)
-
-    # Define the optimization variable X.
-    X = cp.Variable((n, n), symmetric=True)
-
-    # Define the objective function: min <C, X>
-    objective = cp.Minimize(cp.trace(C @ X))
-
-    # Define the constraints
-    linear_constr = [cp.trace(A[i] @ X) == b[i] for i in range(m)]
-    psd_constr = [X >> 0]
-    constraints = linear_constr + psd_constr
-
-    # Formulate the problem
-    problem = cp.Problem(objective, constraints)
-
-    # Solve the problem
-    print("Solving cvx...")
-    problem.solve(solver=solver)  # Using SCS solver explicitly
-    print(f" - Problem Status: {problem.status}")
-
-    if problem.status == cp.OPTIMAL or problem.status == cp.OPTIMAL_INACCURATE:
-        # Print the optimal value
-        print(f" - Optimal Value: {problem.value:.4f}")
-
-        # Retrieve the optimal solution for X
-        X_optimal = X.value
-        S_optimal = psd_constr[0].dual_value
-        y_optimal = np.array([c.dual_value for c in linear_constr])
-
-    else:
-        raise ValueError(
-            f"The problem could not be solved to optimality. Status: {problem.status}"
-        )
-
-    return X_optimal, S_optimal, y_optimal
 
 
 if __name__ == "__main__":
@@ -93,7 +54,9 @@ if __name__ == "__main__":
     C, A, b = generate_random_sdp(n, m)
 
     # solve with cvx
-    X_cvx, S_cvx, y_cvx = sdp_cvx(C, A, b, cp.CLARABEL)
+    X_cvx, S_cvx, y_cvx, f_cvx = sdp_cvx(
+        C=C, A=A, b=b, solver=cp.CLARABEL, verbose=True
+    )
 
     # solve ipdamm
     X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm = solve_ipadmm(C, A, b)

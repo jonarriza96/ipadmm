@@ -3,6 +3,8 @@ import cvxpy as cp
 import scipy as sc
 import scipy.sparse as spr
 
+import time
+
 """
 We solve
     min <C, X>
@@ -190,13 +192,15 @@ def solve_ipadmm(C, A, b):
         X0, S0 = X[it], S[it]
         Y0, y0 = Y[it], y[it]
 
-        # step 1 and 2
+        # steps 1 to 3
+        t0 = time.time()
         X1 = X_update(C=C, A=A, b=b, S=S0, Y=Y0, y=y0, rho1=rho1, rho2=rho2)
+        t1 = time.time()
         S1 = S_update(X=X1, Y=Y0, mu=mu, rho=rho1)
-
-        # step 3
+        t2 = time.time()
         Y1 = Y0 - rho1 * (X1 - S1)
         y1 = y0 - rho2 * (A_linop(X1, A) - b)
+        t3 = time.time()
 
         # calculate residuals
         r1 = np.linalg.norm(X1 - S1, "fro")
@@ -217,12 +221,15 @@ def solve_ipadmm(C, A, b):
         rho1 = np.clip(tau * rho1, 1e-4, 1e4)
         rho2 = np.clip(tau * rho2, 1e-4, 1e4)
         mu = sigma * mu
+        t4 = time.time()
 
         # print
         f = np.trace(C @ X1)
+        t = [t1 - t0, t2 - t1, t3 - t2, t4 - t3]
         print(
             f"{it} | f:{f:.3f}, r:{r:.3e}, s:{s:.3e} | ",
-            f"μ:{mu:.3e}, ρ1:{rho1:.2f}, ρ2:{rho2:.2f}",
+            f"μ:{mu:.3e}, ρ1:{rho1:.2f}, ρ2:{rho2:.2f} | ",
+            f"tX: {t[0]:.1e}, tS: {t[1]:.1e}, tYy: {t[2]:.1e}, tr: {t[3]:.1e}, tt:{sum(t):.1e}",
         )
 
         # iterate
