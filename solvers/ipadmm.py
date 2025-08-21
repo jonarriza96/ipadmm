@@ -146,25 +146,26 @@ def S_update(X, Y, mu, rho):
     return sol_care
 
 
-def solve_ipadmm(C, A, b):
+def sdp_ipadmm(C, A, b, params={}):
 
     # -------------------------------- Parameters -------------------------------- #
-    max_iter = 100
+    max_iter = params.get("max_iter", 500)
 
     # barrier parameters
-    mu = 1.0
-    sigma = 0.9
+    mu = params.get("mu", 1.0)
+    sigma = params.get("sigma", 0.5)
+    mu_start = params.get("mu_start", 1.0)
 
     # ADMM parameters
-    rho1 = 1.0
-    rho2 = 1.0
-    mu_res = 10
-    tau_inc = 2.0
+    rho1 = params.get("rho1", 1.0)
+    rho2 = params.get("rho2", 1.0)
+    r_factor = params.get("r_factor", 10.0)
+    tau = params.get("tau", 1.5)
 
     # tolerances
-    tol_r = 1e-4
-    tol_s = 1e-4
-    tol_mu = 1e-4
+    tol_r = params.get("tol_r", 1e-4)
+    tol_s = params.get("tol_s", 1e-4)
+    tol_mu = params.get("tol_mu", 1e-4)
 
     # ---------------------------------- Solver ---------------------------------- #
     n = C.shape[0]
@@ -174,7 +175,7 @@ def solve_ipadmm(C, A, b):
     print(f" n: {n}, m: {m}")
     print(f" tol_r: {tol_r:.3e}, tol_s: {tol_s:.3e}, tol_mu: {tol_mu:.3e}")
     print(f" μ: {mu}, σ: {sigma}")
-    print(f" ρ1: {rho1}, ρ2: {rho2}, τ_inc: {tau_inc}")
+    print(f" ρ1: {rho1}, ρ2: {rho2}, τ: {tau}")
     print("\n")
 
     # initial values
@@ -203,24 +204,31 @@ def solve_ipadmm(C, A, b):
         t3 = time.time()
 
         # calculate residuals
-        r1 = np.linalg.norm(X1 - S1, "fro")
-        r2 = np.linalg.norm(A_linop(X1, A) - b, 2)
-        r = np.sqrt(r1**2 + r2**2).item()
+        r1_primal = np.linalg.norm(X1 - S1, "fro")
+        r1_dual = rho1 * np.linalg.norm(S1 - S0, "fro")
 
-        s1 = rho1 * np.linalg.norm(S1 - S0, "fro")
-        s2 = rho2 * np.linalg.norm(Ast_linop(y1 - y0, A), "fro")
-        s = np.sqrt(s1**2 + s2**2)
+        r2_primal = np.linalg.norm(A_linop(X1, A) - b, 2)
+        r2_dual = rho2 * np.linalg.norm(Ast_linop(y1 - y0, A), "fro")
 
-        # update barrier and admm parameters
-        tau = 1.0
-        if r > mu_res * s:
-            tau = tau_inc
-        elif s > mu_res * r:
-            tau = 1 / tau_inc
+        r = max(r1_primal, r1_dual)
+        s = max(r2_primal, r2_dual)
 
-        rho1 = np.clip(tau * rho1, 1e-4, 1e4)
-        rho2 = np.clip(tau * rho2, 1e-4, 1e4)
-        mu = sigma * mu
+        if r1_primal > r_factor * r1_dual:
+            rho1 = min(rho1 * tau, 1e4)
+        elif r1_dual > r_factor * r1_primal:
+            rho1 = max(rho1 * 1 / tau, 1e-4)
+
+        # update penalty parameters
+        if r2_primal > r_factor * r2_dual:
+            rho2 = min(rho2 * tau, 1e4)
+        elif r2_dual > r_factor * r2_primal:
+            rho2 = max(rho2 * 1 / tau, 1e-4)
+
+        if max(r, s) < mu_start:
+            mu = sigma * mu
+        else:
+            mu = mu
+
         t4 = time.time()
 
         # print
@@ -244,4 +252,4 @@ def solve_ipadmm(C, A, b):
             print(f"Converged!")
             break
 
-    return X, S, Y, y
+    return X, S, Y, y, f

@@ -4,13 +4,15 @@ import cvxpy as cp
 
 
 from solvers.external import sdp_cvx, sdp_mosek, sdp_clarabel
+from solvers.ipadmm import sdp_ipadmm
 from benchmarks.utils import load_sdplib
 
 
 if __name__ == "__main__":
 
-    solve_mosek = 1
-    solve_clarabel = 1
+    solve_mosek = 0
+    solve_clarabel = 0
+    solve_ipadmm = 1
 
     problem_name = "control1"
     sdplib_path = "/Users/jonarrizabalaga/ipadmm/benchmarks/sdplib"
@@ -27,3 +29,26 @@ if __name__ == "__main__":
     if solve_clarabel:
         X_clar, S_clar, y_clar, f = sdp_clarabel(C=C, A=A, b=b, verbose=True)
         print(f"\n|f_clarabel - f_sdplib| : {np.abs(f - f_sdplib):.5e}\n")
+
+    if solve_ipadmm:
+
+        params = {
+            "max_iter": 500,
+            # barrier parameters
+            "mu": 1.0,
+            "sigma": 0.95,
+            "mu_start": 1.0,
+            # ADMM parameters
+            "rho1": 1.0,
+            "rho2": 1.0,
+            "r_factor": 10.0,
+            "tau": 2.0,
+            # tolerances
+            "tol_r": 1e-4,
+            "tol_s": 1e-4,
+            "tol_mu": 1e-4,
+        }
+        X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm, f_ipadmm = sdp_ipadmm(
+            C=C, A=A, b=b, params=params
+        )
+        print(f"\n|f_ipadmm - f_sdplib| : {np.abs(f_ipadmm - f_sdplib):.5e}\n")

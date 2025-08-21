@@ -4,7 +4,7 @@ import scipy as sc
 import cvxpy as cp
 
 from solvers.external import sdp_cvx
-from solvers.ipadmm import solve_ipadmm
+from solvers.ipadmm import sdp_ipadmm
 
 
 def generate_random_sdp(n, m):
@@ -59,4 +59,4 @@ if __name__ == "__main__":
     )
 
     # solve ipdamm
-    X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm = solve_ipadmm(C, A, b)
+    X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm, f_ipadmm = sdp_ipadmm(C, A, b)
