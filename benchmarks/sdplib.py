@@ -32,18 +32,18 @@ if __name__ == "__main__":
             A=A,
             b=b,
             verbose=True,
-            # max_iter=13,  # ipadmm does not work
-            max_iter=25,  # ipadmm works
+            max_iter=14,  # ipadmm does not work
+            # max_iter=25,  # ipadmm works
         )
         print(f"\n|f_clarabel - f_sdplib| : {np.abs(f - f_sdplib):.5e}\n")
 
     if solve_ipadmm:
 
         params = {
-            "max_iter": 500,
+            "max_iter": 200,
             "scaling": False,
-            # "X_backend": "direct",
-            # "S_backend": "proj",
+            "X_backend": "cvx",
+            "S_backend": "cvx",
             # "rho1": 100.0,
             # "rho2": 1.0,
             # "sigma": 0.95,

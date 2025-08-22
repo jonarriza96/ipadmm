@@ -223,10 +223,9 @@ def X_update(C, A, b, X, S, Y, y, rho1, rho2, method="cg"):
     if method == "cg":
         H = lambda X: (rho1 * X + rho2 * Ast_linop(A_linop(X, A), A))
         rhs = rho1 * S + Y + rho2 * Ast_linop(b, A) + Ast_linop(y, A) - C
-        X, info = cg(H, rhs, maxiter=2000)
+        X_sol, info = cg(H, rhs, maxiter=2000)
         if info == 1:
             print(f"CG max iterations reached")
-        return X
 
     elif method == "direct":
         n = C.shape[0]
@@ -243,12 +242,37 @@ def X_update(C, A, b, X, S, Y, y, rho1, rho2, method="cg"):
 
         x_vec = np.linalg.solve(Hmat, rhs_vec)
         X_sol = x_vec.reshape(n, n)
-        # Optional: symmetrize to reduce numerical asymmetry
-        X_sol = 0.5 * (X_sol + X_sol.T)
-        return X_sol
 
+    elif method == "cvx":
+        X = cp.Variable((X.shape[0], X.shape[1]))
+        objective = cp.Minimize(
+            cp.trace(C @ X)
+            + rho1 / 2 * cp.norm(X - S, "fro") ** 2
+            - cp.trace(Y @ (X - S))
+            + rho2 / 2 * cp.norm(A_linop(X, A) - b, 2) ** 2
+            - y.T @ (A_linop(X, A) - b)
+        )
+
+        try:
+            problem = cp.Problem(objective, [])
+            problem.solve(verbose=0)
+        except Exception:
+            problem = cp.Problem(objective, [])
+            problem.solve(verbose=1)
+
+        if problem.status == cp.OPTIMAL:
+            X_sol = X.value
+            X_sol = 0.5 * (X_sol + X_sol.T)
+
+        else:
+            raise ValueError(
+                "Problem did not solve to optimality. Status:", problem.status
+            )
     else:
         raise ValueError(f"Unknown method '{method}'. Use 'cg' or 'direct'.")
+
+    X_sol = 0.5 * (X_sol + X_sol.T)
+    return X_sol
 
 
 def S_update(X, Y, mu, rho, method="care", eps=1e-14):
@@ -268,17 +292,40 @@ def S_update(X, Y, mu, rho, method="care", eps=1e-14):
         B = I
         Q = mu * I
         R = 1 / rho * I
-        sol_care = sc.linalg.solve_continuous_are(A, B, Q, R)
-        return sol_care
+        S_sol = sc.linalg.solve_continuous_are(A, B, Q, R)
+
     elif method in ("proj"):
         V = X - (1.0 / rho) * Y
         V = 0.5 * (V + V.T)
         w, U = np.linalg.eigh(V)
         w = np.maximum(w, eps)  # eps=0 → pure PSD projection
-        S_proj = U @ np.diag(w) @ U.T
-        return S_proj
+        S_sol = U @ np.diag(w) @ U.T
+
+    elif method == "cvx":
+        S = cp.Variable((X.shape[0], X.shape[1]))
+        log_det_term = -mu * cp.log_det(S)
+        norm_sq_term = (rho / 2) * cp.sum_squares(X - S)  # Squared Frobenius norm
+        inner_prod_term = -cp.trace(Y @ (X - S))
+        objective = cp.Minimize(log_det_term + norm_sq_term + inner_prod_term)
+
+        try:
+            problem = cp.Problem(objective, [])
+            problem.solve(verbose=0)
+        except Exception:
+            problem = cp.Problem(objective, [])
+            problem.solve(verbose=1)
+
+        if problem.status == cp.OPTIMAL:
+            S_sol = S.value
+        else:
+            raise ValueError(
+                "Problem did not solve to optimality. Status:", problem.status
+            )
     else:
         raise ValueError(f"Unknown method '{method}'. Use 'care' or 'proj'.")
+
+    S_sol = 0.5 * (S_sol + S_sol.T)
+    return S_sol
 
 
 def calculate_kkt_residuals(X, S, Y, y, C, A, b, scale=True):
@@ -303,8 +350,8 @@ def sdp_ipadmm(C, A, b, params={}, init=None):
 
     # -------------------------------- Parameters -------------------------------- #
     max_iter = params.get("max_iter", 500)
-    X_backend = params.get("X_backend", "direct")
-    S_backend = params.get("S_backend", "proj")
+    X_backend = params.get("X_backend", "cvx")
+    S_backend = params.get("S_backend", "cvx")
     scaling = params.get("scaling", True)
 
     # barrier parameters
@@ -339,6 +386,7 @@ def sdp_ipadmm(C, A, b, params={}, init=None):
     print(f" μ: {mu}, σ: {sigma}, η: {eta}")
     print(f" ρ1: {rho1}, ρ2: {rho2}, τ: {tau}, r_factor: {r_factor}")
     print(f" scaling: {scaling}")
+    print(f" X_backend: {X_backend}, S_backend: {S_backend}")
     print("\n")
 
     if scaling:

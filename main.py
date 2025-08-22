@@ -59,4 +59,6 @@ if __name__ == "__main__":
     )
 
     # solve ipdamm
-    X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm, f_ipadmm = sdp_ipadmm(C, A, b)
+    X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm, f_ipadmm = sdp_ipadmm(
+        C=C, A=A, b=b, params={"X_backend": "cvx", "S_backend": "cvx"}
+    )
