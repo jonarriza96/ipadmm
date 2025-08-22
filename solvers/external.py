@@ -95,15 +95,15 @@ def sdp_mosek(C, A, b, verbose):
         else:
             raise ValueError(f"Problem could not be solved. Status: {status}")
 
-        X_optimal = X.level()
-        S_optimal = X.dual()
-        y_optimal = np.array([c.level() for c in constraints])
+        X_optimal = X.level().reshape(n, n)
+        S_optimal = X.dual().reshape(n, n)
+        y_optimal = np.squeeze([c.dual() for c in constraints])
         f_optimal = M.primalObjValue()
 
         return X_optimal, S_optimal, y_optimal, f_optimal
 
 
-def sdp_clarabel(C, A, b, verbose):
+def sdp_clarabel(C, A, b, verbose, max_iter):
 
     n = C.shape[0]
     m = len(A)
@@ -218,6 +218,7 @@ def sdp_clarabel(C, A, b, verbose):
     cones = [clarabel.PSDTriangleConeT(n), clarabel.ZeroConeT(m)]
 
     settings = clarabel.DefaultSettings()
+    settings.max_iter = max_iter
     settings.verbose = bool(verbose)
 
     solver = clarabel.DefaultSolver(P, q, A_clar, b_clar, cones, settings)
@@ -235,10 +236,12 @@ def sdp_clarabel(C, A, b, verbose):
 
     # Dual multipliers for equality constraints are the last m entries of y
     if y is not None and len(y) >= nvec + m:
-        y_optimal = np.array(y[nvec:])
+        y_eq = np.array(y[nvec:])
     else:
         # Fallback: use the ZeroCone dual from z if y not provided
-        y_optimal = np.array(z[nvec:])
+        y_eq = np.array(z[nvec:])
+    # Our convention uses y on (b - A(X)); Clarabel uses y on (A x + s - b)
+    y_optimal = -y_eq
 
     # Objective value: q^T x since P = 0
     f_optimal = float(q @ x)

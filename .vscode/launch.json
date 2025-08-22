@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "internalConsole",
+            "internalConsoleOptions": "openOnSessionStart",
+            "env": {
+                "DYLD_LIBRARY_PATH": "/Users/jonarrizabalaga/mumps/build/local/lib",
+                "LD_LIBRARY_PATH": "/Users/jonarrizabalaga/mumps/build/local/lib"
+            }
+        }
+    ]
+}
