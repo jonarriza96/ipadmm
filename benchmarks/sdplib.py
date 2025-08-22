@@ -34,19 +34,20 @@ if __name__ == "__main__":
 
         params = {
             "max_iter": 500,
-            # barrier parameters
-            "mu": 1.0,
-            "sigma": 0.95,
-            "mu_trigger": 1.0,
-            # ADMM parameters
-            "rho1": 1.0,
-            "rho2": 1.0,
-            "r_factor": 10.0,
-            "tau": 2.0,
-            # tolerances
-            "tol_r": 1e-4,
-            "tol_s": 1e-4,
-            "tol_mu": 1e-4,
+            # ############## barrier parameters ##############
+            # "mu": 1.0,
+            # "sigma": 0.95,
+            # "mu_trigger": 1.0,
+            # ############# ADMM parameters ##############
+            # "rho1": 1.0,
+            # "rho2": 1.0,
+            # "r_factor": 10.0,
+            # "tau": 2.0,
+            # ############## tolerances ##############
+            # "eps_prim": 1e-4,
+            # "eps_dual": 1e-4,
+            # "eps_cons": 1e-4,
+            # "eps_gap": 1e-4,
         }
         X_ipadmm, S_ipadmm, Y_ipadmm, y_ipadmm, f_ipadmm = sdp_ipadmm(
             C=C, A=A, b=b, params=params

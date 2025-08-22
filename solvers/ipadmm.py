@@ -154,7 +154,8 @@ def sdp_ipadmm(C, A, b, params={}):
     # barrier parameters
     mu = params.get("mu", 1.0)
     sigma = params.get("sigma", 0.5)
-    mu_trigger = params.get("mu_trigger", 1.0)
+    eta_res = params.get("eta_res", 0.2)
+    eta_gap = params.get("eta_gap", 0.5)
 
     # ADMM parameters
     rho1 = params.get("rho1", 1.0)
@@ -163,9 +164,10 @@ def sdp_ipadmm(C, A, b, params={}):
     tau = params.get("tau", 1.5)
 
     # tolerances
-    tol_r = params.get("tol_r", 1e-4)
-    tol_s = params.get("tol_s", 1e-4)
-    tol_mu = params.get("tol_mu", 1e-4)
+    eps_prim = params.get("eps_prim", 1e-4)
+    eps_dual = params.get("eps_dual", 1e-4)
+    eps_cons = params.get("eps_cons", 1e-4)
+    eps_gap = params.get("eps_gap", 1e-4)
 
     # ---------------------------------- Solver ---------------------------------- #
     n = C.shape[0]
@@ -173,8 +175,10 @@ def sdp_ipadmm(C, A, b, params={}):
 
     print("\n" + "-" * 20 + " IPADMM " + "-" * 20)
     print(f" n: {n}, m: {m}")
-    print(f" tol_r: {tol_r:.3e}, tol_s: {tol_s:.3e}, tol_mu: {tol_mu:.3e}")
-    print(f" μ: {mu}, σ: {sigma}")
+    print(
+        f" εp: {eps_prim:.2e}, εd: {eps_dual:.2e}, εc: {eps_cons:.2e}, εg: {eps_gap:.2e}"
+    )
+    print(f" μ: {mu}, σ: {sigma}, ηr: {eta_res}, ηg: {eta_gap}")
     print(f" ρ1: {rho1}, ρ2: {rho2}, τ: {tau}")
     print("\n")
 
@@ -203,12 +207,24 @@ def sdp_ipadmm(C, A, b, params={}):
         y1 = y0 - rho2 * (A_linop(X1, A) - b)
         t3 = time.time()
 
+        # kkt residuals, gap and cost value
+        f = np.trace(C @ X1)
+        Z1 = C - Ast_linop(y1, A)
+        r_prim = np.linalg.norm(A_linop(X1, A) - b, 2) / (1 + np.linalg.norm(b, 2))
+        r_dual = np.linalg.norm(Z1 - Y1, "fro") / (
+            1 + np.linalg.norm(Z1, "fro") + np.linalg.norm(Y1, "fro")
+        )
+        r_cons = np.linalg.norm(X1 - S1, "fro") / (
+            1 + np.linalg.norm(X1, "fro") + np.linalg.norm(S1, "fro")
+        )
+        gap = np.abs(np.trace(Z1 @ X1)) / (1 + np.abs(f) + np.abs(b @ y1))
+
         # calculate residuals
         r1_primal = np.linalg.norm(X1 - S1, "fro")
         r1_dual = rho1 * np.linalg.norm(S1 - S0, "fro")
 
         r2_primal = np.linalg.norm(A_linop(X1, A) - b, 2)
-        r2_dual = rho2 * np.linalg.norm(Ast_linop(y1 - y0, A), "fro")
+        r2_dual = rho2 * np.linalg.norm(Ast_linop(X1 - X0, A), "fro")
 
         r = max(r1_primal, r1_dual)
         s = max(r2_primal, r2_dual)
@@ -224,7 +240,7 @@ def sdp_ipadmm(C, A, b, params={}):
         elif r2_dual > r_factor * r2_primal:
             rho2 = max(rho2 * 1 / tau, 1e-4)
 
-        if max(r, s) < mu_trigger:
+        if (max(r_prim, r_dual, r_cons) < eta_res * mu) and (gap / n < eta_gap * mu):
             mu = sigma * mu
         else:
             mu = mu
@@ -232,12 +248,13 @@ def sdp_ipadmm(C, A, b, params={}):
         t4 = time.time()
 
         # print
-        f = np.trace(C @ X1)
         t = [t1 - t0, t2 - t1, t3 - t2, t4 - t3]
         print(
-            f"{it} | f:{f:.3f}, r:{r:.3e}, s:{s:.3e} | ",
-            f"μ:{mu:.3e}, ρ1:{rho1:.2f}, ρ2:{rho2:.2f} | ",
-            f"tX: {t[0]:.1e}, tS: {t[1]:.1e}, tYy: {t[2]:.1e}, tr: {t[3]:.1e}, tt:{sum(t):.1e}",
+            f"{it} |  f:{f:.3f} gap:{gap:.2e} | ",
+            f"rp:{r_prim:.2e},  rd:{r_dual:.2e}, rc:{r_cons:.2e} | ",
+            f"r:{r:.2e}, s:{s:.2e} | ",
+            f"μ:{mu:.2e}, ρ1:{rho1:.2f}, ρ2:{rho2:.2f} | ",
+            # f"tX: {t[0]:.1e}, tS: {t[1]:.1e}, tYy: {t[2]:.1e}, tr: {t[3]:.1e}, tt:{sum(t):.1e}",
         )
 
         # iterate
@@ -247,8 +264,9 @@ def sdp_ipadmm(C, A, b, params={}):
         y.append(y1)
 
         # check convergence
-        if r < tol_r and s < tol_s and mu < tol_mu:
-            # todo: check if X and S are PSD
+        residuals = np.array([r_prim, r_dual, r_cons, gap])
+        eps = np.array([eps_prim, eps_dual, eps_cons, eps_gap])
+        if all(residuals < eps):
             print(f"Converged!")
             break
 
