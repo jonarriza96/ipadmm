@@ -37,7 +37,7 @@ if __name__ == "__main__":
             # barrier parameters
             "mu": 1.0,
             "sigma": 0.95,
-            "mu_start": 1.0,
+            "mu_trigger": 1.0,
             # ADMM parameters
             "rho1": 1.0,
             "rho2": 1.0,

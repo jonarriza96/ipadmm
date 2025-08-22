@@ -154,7 +154,7 @@ def sdp_ipadmm(C, A, b, params={}):
     # barrier parameters
     mu = params.get("mu", 1.0)
     sigma = params.get("sigma", 0.5)
-    mu_start = params.get("mu_start", 1.0)
+    mu_trigger = params.get("mu_trigger", 1.0)
 
     # ADMM parameters
     rho1 = params.get("rho1", 1.0)
@@ -224,7 +224,7 @@ def sdp_ipadmm(C, A, b, params={}):
         elif r2_dual > r_factor * r2_primal:
             rho2 = max(rho2 * 1 / tau, 1e-4)
 
-        if max(r, s) < mu_start:
+        if max(r, s) < mu_trigger:
             mu = sigma * mu
         else:
             mu = mu
